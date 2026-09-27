@@ -21,6 +21,27 @@ export function estimateDevice(device: EnergyDevice, daysPerMonth: number, price
   return { dailyKwh, monthlyKwh, monthlyCost: monthlyKwh * pricePerKwh };
 }
 
+/**
+ * 结果区排名规则：按月度用电量从大到小排列；用电量相同时按 id 升序，
+ * 给出与数组位置无关的全序，保证任何时刻排名都是确定的。
+ * 不会修改传入数组。
+ */
+export function rankDevicesByUsage<T extends { id: string; monthlyKwh: number }>(devices: readonly T[]): T[] {
+  return devices.slice().sort((a, b) => b.monthlyKwh - a.monthlyKwh
+    || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+let idSequence = 0;
+
+/**
+ * 生成同前缀下不重复的 id：时间戳 + 进程内自增序号。
+ * 时间戳相同（连续新增）时序号仍能区分，避免重复 key 导致列表渲染错乱。
+ */
+export function createId(prefix: string): string {
+  idSequence += 1;
+  return `${prefix}-${Date.now().toString(36)}-${idSequence.toString(36)}`;
+}
+
 export function summarizeScenario(scenario: EnergyScenario): ScenarioSummary {
   const devices = scenario.devices.map((device) => ({
     ...device,

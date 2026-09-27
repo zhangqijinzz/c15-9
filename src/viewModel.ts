@@ -1,4 +1,4 @@
-import { cloneScenario, summarizeScenario, validateDevice, validateScenarioSettings } from './domain';
+import { cloneScenario, createId, summarizeScenario, validateDevice, validateScenarioSettings } from './domain';
 import { findScenario, type EnergyRepository } from './repository';
 import type { EnergyDevice, EnergyDocument, EnergyScenario, Notice, ViewStatus } from './types';
 
@@ -52,13 +52,16 @@ export class EnergyLensViewModel {
       this.setNotice({ kind: 'error', text: error });
       return;
     }
+    // 只按 id 原位替换，绝不重排设备：编辑过程中排列保持稳定，
+    // 用电量排名只发生在结果区（见 rankDevicesByUsage）。
     this.commit((current) => ({ ...current, devices: current.devices.map((item) => item.id === deviceId ? next : item) }), '参数已更新');
   }
 
   addDevice(): void {
     const scenario = this.activeScenario;
     if (!scenario) return;
-    const device: EnergyDevice = { id: `device-${Date.now()}`, name: '新设备', watts: 100, dailyHours: 1 };
+    // 新设备固定追加到列表末尾：编辑区顺序 = 存储顺序，不随用电量变化。
+    const device: EnergyDevice = { id: this.unusedDeviceId(scenario), name: '新设备', watts: 100, dailyHours: 1 };
     this.commit((current) => ({ ...current, devices: [...current.devices, device] }), '已添加设备，可继续修改参数');
   }
 
@@ -68,6 +71,7 @@ export class EnergyLensViewModel {
       this.setNotice({ kind: 'info', text: '至少保留一个设备，便于计算方案' });
       return;
     }
+    // 按 id 删除，其余设备的相对顺序保持不变。
     this.commit((current) => ({ ...current, devices: current.devices.filter((item) => item.id !== deviceId) }), '设备已移除');
   }
 
@@ -86,7 +90,8 @@ export class EnergyLensViewModel {
   duplicateActive(): void {
     const source = this.activeScenario;
     if (!source || !this.state.document) return;
-    const id = `scenario-${Date.now()}`;
+    // 副本固定追加到方案列表末尾并立即切换；设备顺序沿用源方案。
+    const id = createId('scenario');
     const copy = cloneScenario(source, id, `${source.name} · 副本`);
     const document = { ...this.state.document, scenarios: [...this.state.document.scenarios, copy], activeScenarioId: id };
     this.persist(document, '方案已复制，现在可以修改副本');
@@ -100,6 +105,14 @@ export class EnergyLensViewModel {
   complete(): void {
     this.state = { ...this.state, status: 'completed', notice: { kind: 'success', text: '本次推演已保存，可随时回来继续调整' } };
     this.emit();
+  }
+
+  private unusedDeviceId(scenario: EnergyScenario): string {
+    // 正常情况下 createId 已保证唯一；这里再按当前列表查重兜底，
+    // 避免历史数据或异常时钟产生重复 key，让“新增到末尾”的顺序始终可靠。
+    let id = createId('device');
+    while (scenario.devices.some((device) => device.id === id)) id = createId('device');
+    return id;
   }
 
   private commit(update: (scenario: EnergyScenario) => EnergyScenario, notice: string): void {
