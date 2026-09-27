@@ -43,4 +43,30 @@ describe('EnergyLensViewModel', () => {
     expect(vm.getState().status).toBe('error');
     expect(vm.getState().notice?.text).toContain('保存失败');
   });
+
+  it('keeps a stable device order while edits change the usage ranking', () => {
+    const orderAt = () => vm.activeScenario?.devices.map((device) => device.id);
+    const initial = orderAt();
+    // 把台灯功率改到远超空调：足以让结果图表重排，但编辑列表顺序不动
+    vm.updateDevice('device-lamp', { watts: 9000 });
+    expect(orderAt()).toEqual(initial);
+    vm.updateDevice('device-aircon', { watts: 1 });
+    expect(orderAt()).toEqual(initial);
+  });
+
+  it('appends new devices at the end with unique ids', () => {
+    const before = vm.activeScenario?.devices.map((device) => device.id) ?? [];
+    vm.addDevice();
+    vm.addDevice();
+    const after = vm.activeScenario?.devices ?? [];
+    expect(after).toHaveLength(before.length + 2);
+    expect(after.slice(0, before.length).map((device) => device.id)).toEqual(before);
+    expect(new Set(after.map((device) => device.id)).size).toBe(after.length);
+  });
+
+  it('removes a device in place without reordering the rest', () => {
+    const before = vm.activeScenario?.devices.map((device) => device.id) ?? [];
+    vm.removeDevice('device-fridge');
+    expect(vm.activeScenario?.devices.map((device) => device.id)).toEqual(before.filter((id) => id !== 'device-fridge'));
+  });
 });

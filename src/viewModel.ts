@@ -1,4 +1,4 @@
-import { cloneScenario, summarizeScenario, validateDevice, validateScenarioSettings } from './domain';
+import { cloneScenario, createDeviceId, createScenarioId, summarizeScenario, validateDevice, validateScenarioSettings } from './domain';
 import { findScenario, type EnergyRepository } from './repository';
 import type { EnergyDevice, EnergyDocument, EnergyScenario, Notice, ViewStatus } from './types';
 
@@ -58,7 +58,7 @@ export class EnergyLensViewModel {
   addDevice(): void {
     const scenario = this.activeScenario;
     if (!scenario) return;
-    const device: EnergyDevice = { id: `device-${Date.now()}`, name: '新设备', watts: 100, dailyHours: 1 };
+    const device: EnergyDevice = { id: createDeviceId(), name: '新设备', watts: 100, dailyHours: 1 };
     this.commit((current) => ({ ...current, devices: [...current.devices, device] }), '已添加设备，可继续修改参数');
   }
 
@@ -86,7 +86,7 @@ export class EnergyLensViewModel {
   duplicateActive(): void {
     const source = this.activeScenario;
     if (!source || !this.state.document) return;
-    const id = `scenario-${Date.now()}`;
+    const id = createScenarioId();
     const copy = cloneScenario(source, id, `${source.name} · 副本`);
     const document = { ...this.state.document, scenarios: [...this.state.document.scenarios, copy], activeScenarioId: id };
     this.persist(document, '方案已复制，现在可以修改副本');

@@ -41,6 +41,32 @@ export function summarizeScenario(scenario: EnergyScenario): ScenarioSummary {
   };
 }
 
+// 结果区专用：按月度用电量从大到小排列。
+// 用电量相同时用 id 兜底，保证任意两次排序结果完全一致（新增/删除/切换方案/重开都不会“这次一个样下次另一个样”）。
+// 注意：编辑区的设备列表永远使用文档里的存储顺序，绝不调用此排序，避免编辑中行跳动、焦点丢失。
+export function rankDevicesByUsage<T extends { id: string; monthlyKwh: number }>(devices: readonly T[]): T[] {
+  return devices.slice().sort((a, b) => (b.monthlyKwh - a.monthlyKwh) || idTieBreak(a.id, b.id));
+}
+
+function idTieBreak(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+let scenarioSequence = 0;
+
+export function createScenarioId(now: () => number = () => Date.now()): string {
+  scenarioSequence = (scenarioSequence + 1) % Number.MAX_SAFE_INTEGER;
+  return `scenario-${now()}-${scenarioSequence.toString(36)}`;
+}
+
+let deviceSequence = 0;
+
+// 设备 id 同时带时间戳与进程内自增序号，即使同一毫秒连续新增也不会重复，列表 key 始终稳定。
+export function createDeviceId(now: () => number = () => Date.now()): string {
+  deviceSequence = (deviceSequence + 1) % Number.MAX_SAFE_INTEGER;
+  return `device-${now()}-${deviceSequence.toString(36)}`;
+}
+
 export function validateDevice(device: Pick<EnergyDevice, 'name' | 'watts' | 'dailyHours'>): string | null {
   if (!device.name.trim()) return '请填写设备名称';
   if (!Number.isFinite(device.watts) || device.watts < 0) return '功率不能为负数';
